@@ -281,6 +281,23 @@ Dossier completo en `lab/ejercicios/E02-recon-pasivo.md`. Resumen:
 
 ---
 
+## 2026-11-16 — Cierre final: arquitectura de sigilo del rojo
+
+- `plan-equipo-rojo.md` extendido con sección 6 (arquitectura de sigilo:
+  indetectable ≠ intrazable; dos canales — A red disciplinado, B
+  aplicación con navegador real + mitmproxy; disciplina de fingerprint
+  en 7 reglas) y sección 7 (instalación del toolset, comandos por
+  escenario: E01 rungs 3-4 con root, web con curl-impersonate/ffuf
+  rate-limited, interceptación y replay de Server Actions).
+- Script 2 del arsenal: `lab/scripts/capture_server_actions.py`
+  (mitmproxy addon con scope discipline: solo registra el host del
+  engagement).
+- El registro de auto-percepción del rojo ("qué creo que dejó") queda
+  definido como insumo del ejercicio meta de la fase azul.
+
+---
+
+
 
 
 

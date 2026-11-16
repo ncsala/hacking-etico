@@ -136,13 +136,140 @@ paso. Si no se logró acceso: se simula discutido en el informe.
 5. **Nada de munición real**: sin malware, sin exploit de terceros, sin
    datos falsos de terceros. Las técnicas del playbook alcanzan.
 
-## 5. Estado y próximos pasos
+## 6. Arquitectura de sigilo del equipo rojo (indetectable ≠ intrazable)
+
+Definición operativa:
+- **INDETECTABLE** (objetivo jugable del lab): el azul no encuentra
+  señales de actividad anómala. Se juega con disciplina de comportamiento.
+- **INTRAZABLE** (fuera del marco): ocultar identidad/atribución con
+  cadenas de infra anónima, pagos ocultos, etc. En el lab no aporta nada
+  jugable y fuera de él es intrusión. El rojo profesional se optimiza
+  por "no alertar", no por "no existir".
+
+**Principio central:** el mejor sigilo es parecer tráfico normal. La
+arquitectura se ordena en dos canales:
+
+```
+CANAL A — Red (desde la VPS roja)          CANAL B — Aplicación (el sigiloso)
+┌─────────────────────────────┐            ┌─────────────────────────────┐
+│ nmap / ffuf / hydra con     │            │ Navegador real + mitmproxy  │
+│ disciplina de ruido         │            │ interceptando Server Actions│
+│                             │            │ del propio flujo de uso     │
+│ Detectable por diseño       │            │ Indistinguible de un usuario│
+│ → sirve para MEDIR (E01)    │            │ real, porque ES el usuario  │
+│                             │            │ → canal de ataque E03       │
+└─────────────────────────────┘            └─────────────────────────────┘
+```
+
+### Disciplina de fingerprint (ambos canales)
+1. **UA fijo y real**: un User-Agent de navegador verdadero, siempre el
+   mismo. Nada de rotar UAs "por si acaso" — la rotación es firma.
+2. **curl-impersonate**: cualquier curl que toque el blanco sale con el
+   JA3/JA4 de un Chrome real (el TLS fingerprint deja de delatar).
+3. **Rate ceiling**: ≤ 1 req/s en probing web; `-t 2`/`-rate` en ffuf;
+   `-t 2 -w 5` en hydra.
+4. **Horario de tráfico real**: operar cuando el sitio tiene tráfico
+   normal; nunca ráfagas a las 4 AM (timing es firma).
+5. **Orden randomizado**: `--randomize-hosts/ports` en nmap,
+   `-shuffle` en ffuf.
+6. **Cero headers de herramientas**: `sqlmap --random-agent`,
+   `-H` custom en ffuf. Antes de correr cualquier tool, revisar qué
+   firma dejaría (el rojo anota qué patrón está evitando — insumo
+   directo de reglas para la fase azul).
+7. **Ventanas cortas**: sesiones de probing de 10-15 min, no maratones.
+
+### Qué NO se hace (marco, reafirmado)
+- Sin cadenas de proxies anónimos, sin pagos ocultos, sin ocultar al
+  operador. El sigilo del lab es de comportamiento, y se mide en la
+  fase azul: "¿qué dejó el rojo que el azul pudiera ver?"
+
+## 7. Escenarios y comandos (con la roja provisionada)
+
+### 7.1 Instalación del toolset (Debian 12 / Ubuntu en la roja)
+
+```bash
+sudo apt update && sudo apt full-upgrade -y
+sudo apt install -y nmap hydra sqlmap jq git tmux curl python3-pip mitmproxy
+
+# ffuf (binario release)
+curl -sL https://github.com/ffuf/ffuf/releases/latest/download/ffuf_2.1.0_linux_amd64.tar.gz | tar xz -C /tmp && sudo mv /tmp/ffuf /usr/local/bin/
+
+# curl-impersonate (Chrome real en línea de comando)
+curl -sL https://github.com/lwthiker/curl-impersonate/releases/download/v0.6.1/curl-impersonate-v0.6.1.x86_64-linux-gnu.tar.gz | tar xz -C /usr/local/bin curl_chrome116 curl_chrome116-series
+
+# wordlists mínimas (solo Discovery)
+git clone --depth 1 https://github.com/danielmiessler/SecLists /opt/seclists
+
+# estructura del engagement
+mkdir -p ~/engagement-hayrifa/{notes,recon/{dns,cert,js},loot,report}
+```
+
+### 7.2 Escenario E01 — peldaños 3 y 4 (root real en la roja)
+
+```bash
+# Peldaño 3: SYN scan fragmentado, lento (antes era imposible sin root)
+sudo nmap -sS -f -T1 --max-rate 5 -p 22,80,443,3000,8081,5432 64.177.41.17
+
+# Peldaño 4: payload random + puertos randomizados + timing T2
+sudo nmap -sS -f --data-length 24 --randomize-ports -T2 --max-rate 5 -p 1-500 64.177.41.17
+```
+El rojo anota después de cada peldaño: "qué creo que el azul vio"
+(sin mirar los logs — eso es fase azul).
+
+### 7.3 Escenario web disciplinado (Canal A con fingerprint limpio)
+
+```bash
+# Sondeo con JA3 de Chrome real (curl-impersonate)
+curl_chrome116 -s -o /dev/null -w "%{http_code} %{time_total}\n" https://hayrifa.uy/raffle/<ID>
+
+# Fuzzing de rutas: rate limitado, UA real fijo, shuffle
+ffuf -u https://hayrifa.uy/FUZZ -w /opt/seclists/Discovery/Web-Content/common.txt \
+     -rate 15 -t 2 -shuffle -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64) Chrome/126.0" \
+     -fc 404 -of json -o ~/engagement-hayrifa/recon/ffuf-raices.json
+```
+
+### 7.4 Escenario Server Actions (Canal B — el sigiloso, E03)
+
+El addon `lab/scripts/capture_server_actions.py` (mitmproxy) registra
+cada Server Action que el navegador dispara contra el blanco — con
+scope discipline dentro del propio script (solo host del engagement):
+
+```bash
+# Captura (navegando la app como usuario real: comprar, consultar)
+mitmdump -s capture_server_actions.py -w ~/engagement-hayrifa/recon/flows.mitm
+
+# Reproducción con parámetros alterados (el test de validación del server):
+curl https://hayrifa.uy/raffle/<ID> -X POST \
+  -H "Next-Action: <action-id capturado>" \
+  -H "Cookie: <sesión capturada>" \
+  -H "Content-Type: text/plain;charset=UTF-8" \
+  --data '<payload alterado>'
+```
+Técnicas derivadas: cambiar IDs de rifa/ticket por otros, alterar montos
+o estados, replay sin sesión — todo contra la app propia, medido con
+`--delay` si se repite.
+
+### 7.5 El registro del rojo (cada sesión)
+
+```bash
+# Al terminar cada sesión de la fase roja, SIN mirar logs del azul:
+echo "$(date -u +%FT%TZ) | canal A | nmap rung3 | creo que dejó: SYNs lentos" \
+  >> ~/engagement-hayrifa/notes/01-recon-activo.md
+```
+Ese archivo de auto-percepción es el insumo del ejercicio meta: en la
+fase azul se compara contra `eve.json` y se mide el gap.
+
+## 8. Estado y próximos pasos
 
 - [x] ROE + plan del equipo rojo (este documento)
+- [x] Arquitectura de sigilo (sección 6: indetectable ≠ intrazable,
+  dos canales, disciplina de fingerprint) + escenarios con comandos (sección 7)
 - [x] Fase 1 recon pasivo (E02 dossier completo)
 - [x] Script 1 del arsenal (recon_js_endpoints.py)
-- [ ] VPS roja: crear (Hetzner/DO), onboarding, toolset
-- [ ] Fase 2: E01 peldaños 3–4 (con root)
-- [ ] Fase 3: E03 campaña web (mitmproxy + Server Actions)
+- [x] Script 2 del arsenal (capture_server_actions.py — mitmproxy addon
+  para interceptar Server Actions, con scope discipline interno)
+- [ ] VPS roja: crear (Hetzner/DO), onboarding, toolset (sección 7.1)
+- [ ] Fase 2: E01 peldaños 3–4 (con root, sección 7.2)
+- [ ] Fase 3: E03 campaña web (mitmproxy + Server Actions, sección 7.4)
 - [ ] Fase 4: E04 persistencia (según acceso logrado)
 - [ ] Fase 5: E05 informe + hand-off a la fase azul
