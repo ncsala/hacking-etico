@@ -251,6 +251,22 @@ Dossier completo en `lab/ejercicios/E02-recon-pasivo.md`. Resumen:
 
 ---
 
+## 2026-11-16 — E02: recon vía bundles JS → Server Actions
+
+- Primer script del arsenal: `lab/scripts/recon_js_endpoints.py`
+  (descarga HTML → extrae chunks → busca endpoints/NEXT_PUBLIC/terceros;
+  output cacheado en `lab/scripts/output/`, .gitignore creado).
+- 14 bundles analizados: **cero endpoints de API en el cliente** — la
+  app usa Next.js **Server Actions** (`createServerReference`), las
+  llamadas van por POST con action-IDs encriptados, no por URLs del API.
+- Recon estático = dead end (hallazgo defensivo-arquitectural). La
+  superficie real de Server Actions (interceptar/reproducir action-IDs
+  con parámetros alterados) queda para el E03.
+- Bonus: PostHog con endpoint `/ingest` identificado.
+
+---
+
+
 
 ## 2026-11-16 — ⚠️ INCIDENTE: el lab tiró la web de producción (resuelto)
 

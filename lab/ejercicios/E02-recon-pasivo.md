@@ -49,7 +49,37 @@
 | API (`api.hayrifa.uy`) | 404 en `/`, `/health`, `/docs`, `/openapi.json` | API existe pero endpoints no obvios: descubrir con el tráfico real de la app (JS del frontend revela las rutas del API) |
 | security.txt | 404 | Menor |
 
-## 5. Qué NO se pudo ver (y por qué es la lección del E02)
+## 5. Recon de la app vía bundles JS (resultado: Server Actions)
+
+Se descargaron los 14 chunks JS del frontend (script del lab:
+`lab/scripts/recon_js_endpoints.py`, bundles cacheados en
+`lab/scripts/output/js-bundles/`, excluidos del git via .gitignore).
+
+| Búsqueda | Resultado |
+|---|---|
+| URLs del API (`api.hayrifa.uy`) | **Cero en todo el JS del cliente** |
+| Rutas `/api/`, `/v1/` | Cero |
+| NEXT_PUBLIC_* | Cero |
+| Terceros | **PostHog** con `api_host:"/ingest"` (analytics) |
+
+**Conclusión técnica: la app usa Next.js Server Actions**
+(`createServerReference` presente en los bundles). Las mutaciones y
+consultas van por acciones encriptadas del server (POST al mismo
+router), NO por endpoints de API visibles en el cliente.
+
+Lecturas del atacante:
+1. El recon estático del JS es un dead end para el API — defensivo por
+   diseño de la app (no se buscó, simplemente es así).
+2. PERO no desaparece la superficie: las Server Actions son llamadas
+   POST con action-IDs que el cliente ejecuta. En el E03 se pueden
+   interceptar (las manda el propio navegador) y reproducirlas con
+   parámetros alterados — técnica conocida contra Next.js Server Actions.
+3. `/ingest` (PostHog) es un endpoint POST identificable en producción.
+4. Lección de tooling: el script v1 asumía `<script src>` plano; Next 16
+   inlinea los chunks en el runtime JSON — corregido y documentado en
+   el script mismo.
+
+## 6. Qué NO se pudo ver (y por qué es la lección del E02)
 
 - El IDS azul no registró nada de este recon: **no hay detección
   posible del recon pasivo** (ningún paquete llegó a la infra).
