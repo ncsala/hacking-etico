@@ -165,6 +165,53 @@ propia, la roja lanza y la azul recibe, nada a terceros.
 
 ---
 
+## 2026-11-16 — Sesión 5: E01 en marcha + hallazgo de doble firewall
+
+**El hallazgo del día (digno de oro)**
+
+El primer nmap declaró la azul "down". Investigación con ping, connects
+de python y los logs del firewall reveló: **ufw estaba activo en
+paralelo al nftables** (preinstalado en la imagen), permitiendo solo el
+22 y descartando en silencio el 80/443. Los firewalls se evalúan ambos:
+nuestro `accept` de 80/443 nunca había tenido efecto. Lección
+documentada: dos firewalls en paralelo = config no auditable.
+
+**Cambios aplicados (con prueba de SSH fresca tras cada paso)**
+
+1. `ufw disable` — nftables queda como única fuente de verdad.
+2. nftables: regla `tcp dport {80,443} accept` desactivada (comentada
+   con referencia al E03). La postura "host muerto en 80/443" se
+   conserva — ahora por diseño documentado y no por accidente.
+   Copia actualizada en `configs/etc/nftables.conf`.
+
+**E01 — Peldaño 1 (gritón) ejecutado desde la PC local**
+
+- `nmap -Pn -T4 -p 1-300` → 22 open, 299 filtered, 8.5s.
+- Azul: `LAB Portscan 20puertos/60s` + `LAB SSH 5conn/60s` dispararon
+  inmediatamente (599 líneas, ventana exacta del scan).
+- Tabla de detección en `lab/ejercicios/E01-escalera-sigilo.md`
+  (peldaños 2–4 pendientes).
+- Notas de aprendizaje: connect scan (sin root) vs SYN scan; falso
+  positivo de bruteforce por el scan del 22 (tuning del azul).
+
+---
+
+## 2026-11-16 — E01 peldaño 2: el lento TAMBIÉN cayó
+
+- `nmap -Pn -T1 --max-rate 5 -p 6 puertos`, 196s de ejecución.
+- Detectado: 19 alertas LAB Portscan + 5 `ET SCAN ... PostgreSQL`.
+- Causa: **retransmisiones del connect scan sobre puertos filtrados**
+  cruzan el umbral `count 20` (cuenta paquetes, no puertos únicos).
+- Iteración de regla intentada: `portcount` en detection_filter/filter/
+  threshold → la v8.0.3 no lo soporta (3 errores de parse documentados).
+  Revertido a `count 20` rev:2. Suricata re-validado y activo.
+- Backlog del azul actualizado: detección por cadencia/puertos únicos.
+- Copia de `local.rules` actualizada en el repo.
+
+---
+
+
+
 
 
 ## 2026-11-16 — Sesión 4: password de SSH apagado
