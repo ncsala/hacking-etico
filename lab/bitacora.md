@@ -266,6 +266,39 @@ Dossier completo en `lab/ejercicios/E02-recon-pasivo.md`. Resumen:
 
 ---
 
+## 2026-11-16 — Cierre de sesión: plan del equipo rojo completo
+
+- Nuevo documento: `lab/plan-equipo-rojo.md` — el plan operativo
+  profesional del lado rojo: ROE con marco legal explícito (pedido del
+  usuario: solo infra propia, cero terceros, cero infra robada),
+  infraestructura (VPS roja en proveedor distinto + estructura de
+  engagement), toolset completo, metodología de campaña (5 fases),
+  tradecraft del operador e higiene (no evasión), estado y próximos pasos.
+- E02 dossier: numeración corregida (era desprolija).
+- `.gitignore` para output de scripts.
+- Sesión cerrada. Mañana: crear VPS roja → onboarding + toolset →
+  E01 peldaños 3–4 → preparación E03 (mitmproxy + Server Actions).
+
+---
+
+## 2026-11-16 — Cierre final: arquitectura de sigilo del rojo
+
+- `plan-equipo-rojo.md` extendido con sección 6 (arquitectura de sigilo:
+  indetectable ≠ intrazable; dos canales — A red disciplinado, B
+  aplicación con navegador real + mitmproxy; disciplina de fingerprint
+  en 7 reglas) y sección 7 (instalación del toolset, comandos por
+  escenario: E01 rungs 3-4 con root, web con curl-impersonate/ffuf
+  rate-limited, interceptación y replay de Server Actions).
+- Script 2 del arsenal: `lab/scripts/capture_server_actions.py`
+  (mitmproxy addon con scope discipline: solo registra el host del
+  engagement).
+- El registro de auto-percepción del rojo ("qué creo que dejó") queda
+  definido como insumo del ejercicio meta de la fase azul.
+
+---
+
+
+
 
 
 ## 2026-11-16 — ⚠️ INCIDENTE: el lab tiró la web de producción (resuelto)

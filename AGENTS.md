@@ -186,9 +186,14 @@ TryHackMe Jr Penetration Tester → HTB Easy/Medium → especialización.
 ## Documentación del lab (estructura obligatoria)
 El lab se documenta en `lab/` de este repo:
 - `lab/00-arquitectura.md` — inventario, diagrama, decisiones y por qué
+- `lab/plan-equipo-rojo.md` — plan operativo del rojo: ROE, infra,
+  toolset, metodología de campaña (E01–E05), tradecraft del operador
 - `lab/bitacora.md` — registro cronológico de cambios (fecha + qué + por qué)
-- `lab/campania.md` — **playbook detallado E01–E05**: comandos, reglas de
+- `lab/campania.md` — playbook detallado E01–E05: comandos, reglas de
   detección esperadas, mapeo MITRE ATT&CK, backlog de upgrades del azul
+- `lab/ejercicios/` — dossiers y tablas de cada ejercicio (E01, E02, ...)
+- `lab/scripts/` — scripts propios del lab (arsenal reutilizable);
+  output cacheado en `lab/scripts/output/` (excluido del git)
 - `lab/configs/` — copia exacta de cada archivo de config aplicado en la
   VPS, con su misma ruta relativa
 Regla: **cada cambio en la VPS actualiza bitácora y configs en la misma
