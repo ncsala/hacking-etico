@@ -69,10 +69,18 @@ tráfico sí es inspeccionable.
 - 186.53.225.232 (última conexión SSH documentada en el login del host)
 - ⚠️ Dinámica presumiblemente — verificar en cada ejercicio
 
+## Plan a futuro (2026-11-16): arquitectura de dos VPS
+
+Segunda VPS **roja** (estación de ataque, proveedor distinto a Vultr para
+diferencia de ASN) → ataca a la **azul** (esta máquina). El detalle
+completo del plan, la regla de oro ("la roja lanza, la azul recibe, nada
+apunta a terceros") y el roadmap de campaña (E01–E05) están en el
+`AGENTS.md` del repo. Hoy la azul está completa; la roja queda pendiente
+de creación por el usuario.
+
 ## Pendientes de la arquitectura
 
-- [ ] Activar `NOPASSWD` (validado con visudo) para gestión automatizada
-- [ ] Decidir: apagar `PasswordAuthentication` (requiere confirmar que no
-  se entra desde otros dispositivos)
-- [ ] Definir puerto de lab para exponer la web inspeccionable
-- [ ] Segunda VPS / VM local para el lado rojo dedicado
+- [ ] VPS roja: crearla cuando el usuario pueda (proveedor ≠ Vultr)
+- [ ] Con la roja: instalar toolset del atacante + hardening igual a la azul
+- [ ] puerto de lab para exponer la web inspeccionable (E03)
+- [ ] honeytokens + captura de paquetes off-host

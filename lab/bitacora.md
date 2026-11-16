@@ -85,3 +85,118 @@ correspondientes en `configs/`.
 - Ejercicio E01 (portscan → detección).
 
 ---
+
+## 2026-11-16 — Sesión 3: Suricata en producción
+
+**Qué se hizo**
+
+1. **Suricata 8.0.3** instalado (`suricata` + `suricata-update`).
+   Hallazgo clave: trae **JA3/JA4 integrado de fábrica** — los
+   fingerprints TLS que se estudian en el lab se ven de serie en `eve.json`.
+2. Configurado: `HOME_NET: "[64.177.41.17]"`, interfaz `enp1s0` (3
+   menciones), reglas propias añadidas a `rule-files`.
+3. `suricata-update` descargó **69.456 reglas ET-open** (53.484 enabled).
+4. Reglas propias en `/var/lib/suricata/rules/local.rules`:
+   - `1000001` Portscan 20puertos/60s (detection_filter)
+   - `1000002` UA sqlmap
+   - `1000003` SSH 5conn/60s (bruteforce)
+5. Validado con `suricata -T` → "successfully loaded" → servicio
+   **enable --now** → active. Logs escribiendo: `eve.json`, `fast.log`,
+   `stats.log`.
+6. Respaldos actualizados: `configs/etc/suricata/suricata.yaml` y
+   `configs/var/lib/suricata/rules/local.rules`.
+
+**Error propio documentado (aprendizaje)**
+
+Los primeros `sed` corrieron **sin sudo** y fallaron silenciosamente con
+"Permission denied" — el output engañoso hizo pensar que había aplicado.
+Lección: en comandos remotos no interactivos, verificar siempre con
+`grep` que el cambio quedó escrito antes de seguir. El re-run con sudo
+usó guard `grep -q ... ||` para no duplicar la línea de rule-files.
+
+**Primeras detecciones reales (25 segundos de vida)**
+
+- ET CINS Active Threat Intel: IP con mala reputación → puerto 6008
+- ET Spamhaus DROP ×2: IPs blocklisteadas tanteando telnet (23) y puertos
+  random
+- O sea: el ruido de fondo de internet es constante y la ET lo caza solo.
+  Esto ES la línea base del lab: la caja "en calma" ya tiene alertas.
+
+## 2026-11-16 — Cierre de sesión: plan a dos VPS definido
+
+**Estado de la azul al cierre: COMPLETA Y DURMIENDO VIGILADA**
+
+| Componente | Estado |
+|---|---|
+| Updates | ✓ al día + reboot |
+| SSH | key-only (1 llave, PC local), root login off, fail2ban banneando |
+| Sudo | NOPASSWD para rifa (off switch documentado) |
+| nftables | ✓ aplicado, persistente, contadores activos |
+| Suricata | ✓ activo, 69k reglas ET + 3 propias, JA3/JA4 integrado |
+| Web (blanco) | ✓ intocada, corriendo por Cloudflare Tunnel |
+| Docs | ✓ bitácora + configs respaldadas |
+
+**Plan a futuro** (queda anotado en `AGENTS.md`): segunda VPS **roja**
+en proveedor distinto (ASN diferente) como estación de ataque — pendiente
+de que el usuario la cree. Regla de oro escrita a su pedido: la roja
+lanza, la azul recibe; nada apunta a terceros.
+
+**Roadmap de campaña** definido: E01 escalera de sigilo → E02 recon
+pasivo → E03 campaña web (con backup de DB previo) → E04 persistencia
+→ E05 informe.
+
+**Próximo paso cuando se retome:** crear la roja, o instalar nmap local
+(`sudo apt install -y nmap`) y correr E01 desde la PC.
+
+---
+
+## 2026-11-16 — Playbook de campaña escrito (`lab/campania.md`)
+
+A pedido del usuario: plan "ultra detallado / ultra realista". El
+playbook define por ejercicio (E01–E05): comandos exactos, reglas de
+Suricata que deberían disparar, qué mirar en `eve.json`/`fast.log`,
+mapeo MITRE ATT&CK (T1046, T1595, T1190, T1053, T1098), reglas de
+operación (rate limits para no DoS-earnos a nosotros mismos, backup
+previo en E03, stop conditions) y el backlog de upgrades del azul
+(honeytokens, pcap, snapshot de integridad, regla de timing, auditd).
+
+Marco reafirmado en el encabezado del playbook: solo infraestructura
+propia, la roja lanza y la azul recibe, nada a terceros.
+
+---
+
+
+
+## 2026-11-16 — Sesión 4: password de SSH apagado
+
+**Qué se hizo**
+
+- `PasswordAuthentication` → **no** en
+  `/etc/ssh/sshd_config.d/00-no-password.conf` (el archivo por fin
+  coincide con su nombre 😅). Respaldado como
+  `configs/etc/ssh/sshd_config.d/00-key-only.conf`.
+- Detalle técnico: en sshd gana el **primer** valor leído (los archivos
+  de `sshd_config.d/` se leen en orden lexicográfico), por eso se corrigió
+  el existente en vez de crear uno nuevo que no habría ganado.
+- Validación: `sshd -t` (sintaxis) + `sshd -T` (config efectiva:
+  `passwordauthentication no`) + restart + **conexión nueva de prueba**
+  (key-only OK, sudo OK).
+- Bonus: `linuxuser` (UID 1000) tiene password **bloqueado** — no es puerta.
+
+**Por qué (urgencia que motivó el cambio)**
+
+Con `NOPASSWD` activo, un password de SSH adivinado daba **root directo**.
+La evidencia de los logs mostró que TODOS los logins exitosos eran
+`publickey` desde la IP de casa — el password era una puerta que nadie
+legítimo usaba y solo servía para brute force. fail2ban quedó como
+segunda capa (el SSH sigue expuesto; lo que se eliminó es la
+posibilidad de entrar adivinando).
+
+**Estado de la superficie externa (a esta altura)**
+
+Puerto 22 abierto, key-only, fail2ban banneando. Única puerta real:
+la llave privada en la PC local. Rescate: consola web Vultr.
+
+---
+
+
