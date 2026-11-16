@@ -266,6 +266,22 @@ Dossier completo en `lab/ejercicios/E02-recon-pasivo.md`. Resumen:
 
 ---
 
+## 2026-11-16 — Cierre de sesión: plan del equipo rojo completo
+
+- Nuevo documento: `lab/plan-equipo-rojo.md` — el plan operativo
+  profesional del lado rojo: ROE con marco legal explícito (pedido del
+  usuario: solo infra propia, cero terceros, cero infra robada),
+  infraestructura (VPS roja en proveedor distinto + estructura de
+  engagement), toolset completo, metodología de campaña (5 fases),
+  tradecraft del operador e higiene (no evasión), estado y próximos pasos.
+- E02 dossier: numeración corregida (era desprolija).
+- `.gitignore` para output de scripts.
+- Sesión cerrada. Mañana: crear VPS roja → onboarding + toolset →
+  E01 peldaños 3–4 → preparación E03 (mitmproxy + Server Actions).
+
+---
+
+
 
 
 ## 2026-11-16 — ⚠️ INCIDENTE: el lab tiró la web de producción (resuelto)

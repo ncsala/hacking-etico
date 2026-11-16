@@ -37,7 +37,7 @@
 4. **CAA vacío** es higiene pendiente (fase azul: agrega CAA para
    restringir CAs).
 
-## 4. Recon de la app (superficie HTTP, vía Cloudflare — extensión E02)
+## 3. Recon de la app (superficie HTTP, vía Cloudflare — extensión E02)
 
 | Dato | Resultado | Lectura del atacante |
 |---|---|---|
@@ -87,7 +87,7 @@ Lecturas del atacante:
   subdominios muertos fuera) — que es trabajo de config, no de red.
 - El IP de origen no aparece en ningún registro público consultado.
 
-## 4. Pendiente
+## 6. Pendiente
 
 - [ ] Verificar el 530 (¿caída intencional del sitio o problema real
   del tunnel?) — acción del dueño, fuera de la fase roja
