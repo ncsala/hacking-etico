@@ -59,6 +59,47 @@ de la detección, practicando en un entorno que controlo.
    conceptos y técnica de lab; no arma infraestructura de intrusión no
    autorizada ni guías de ocultación contra terceros.
 
+## Metodología: fases ROJA y AZUL separadas (2026-11-16)
+
+A pedido del usuario, el lab NO corre los dos lados simultáneamente:
+
+- **FASE ROJA (a ciegas):** el atacante opera sin ver logs/configs del
+  azul. Suricata/fail2ban registran solos en background. El asistente
+  apoya SOLO el lado rojo (herramientas, técnica) y no revela telemetría
+  del defensor. Entregable rojo: qué logró + su auto-percepción del rastro.
+- **PRIORIDAD EXPLÍCITA (reafirmada por el usuario 2026-11-16): TODO el
+  trabajo es ROJO hasta el final del final.** Toda la infra, instalación
+  de herramientas, pruebas de ataque y campañas corren primero, contra
+  la línea de base original. El lado azul (hardening, reglas de
+  detección, informe defensivo) se construye RECÉN AL FINAL, después de
+  la campaña completa, como entregable. Durante la fase roja: cero
+  modificaciones al azul, salvo la cámara Suricata que sigue grabando
+  (pasiva, necesaria para que la fase azul tenga datos).
+- **FASE AZUL (a libro abierto):** juntos se analizan los logs, se
+  reconstruye la campaña desde la telemetría, se escriben las reglas que
+  faltan y se arma el informe (E05). Clave del entregable: el gap entre
+  "lo que el rojo cree haber dejado" y "lo que realmente quedó".
+
+El marco no cambia en ninguna fase: el blanco es siempre la VPS azul y
+la web propia. Nada de terceros, jamás.
+
+### Línea de base de la FASE ROJA (2026-11-16, a pedido del usuario)
+
+El rojo ataca el estado ORIGINAL de la VPS, no el hardening del lab.
+Revertido para la fase roja:
+
+| Componente | Fase roja (original) | Vuelve en fase azul |
+|---|---|---|
+| nftables (nuestro) | ❌ eliminado (ufw original activo: deny incoming, solo 22) | ✓ re-aplicar desde `configs/etc/nftables.conf` |
+| ufw | ✅ activo (era el original, lo descubrimos de casualidad) | decisión pendiente (convivencia con nftables) |
+| fail2ban | ❌ detenido | ✓ reactivar |
+| SSH | ✅ key-only + NOPASSWD (operativo, no afecta superficie) | igual |
+| **Suricata** | ✅ **SIGUE grabando** — es la cámara de la fase azul (modo IDS, no bloquea nada) | igual |
+| Web + tunnel | ✅ intactos (incidente del forward resuelto) | igual |
+
+Regla derivada del incidente: tras cualquier cambio de firewall, probar
+tráfico de host Y de contenedor (curl al sitio desde afuera).
+
 ## El juego del lab (definición del ejercicio, 2026-11-16)
 Es rojo vs azul sobre infraestructura propia, con objetivos asimétricos:
 

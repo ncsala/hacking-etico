@@ -165,6 +165,177 @@ propia, la roja lanza y la azul recibe, nada a terceros.
 
 ---
 
+## 2026-11-16 — Sesión 5: E01 en marcha + hallazgo de doble firewall
+
+**El hallazgo del día (digno de oro)**
+
+El primer nmap declaró la azul "down". Investigación con ping, connects
+de python y los logs del firewall reveló: **ufw estaba activo en
+paralelo al nftables** (preinstalado en la imagen), permitiendo solo el
+22 y descartando en silencio el 80/443. Los firewalls se evalúan ambos:
+nuestro `accept` de 80/443 nunca había tenido efecto. Lección
+documentada: dos firewalls en paralelo = config no auditable.
+
+**Cambios aplicados (con prueba de SSH fresca tras cada paso)**
+
+1. `ufw disable` — nftables queda como única fuente de verdad.
+2. nftables: regla `tcp dport {80,443} accept` desactivada (comentada
+   con referencia al E03). La postura "host muerto en 80/443" se
+   conserva — ahora por diseño documentado y no por accidente.
+   Copia actualizada en `configs/etc/nftables.conf`.
+
+**E01 — Peldaño 1 (gritón) ejecutado desde la PC local**
+
+- `nmap -Pn -T4 -p 1-300` → 22 open, 299 filtered, 8.5s.
+- Azul: `LAB Portscan 20puertos/60s` + `LAB SSH 5conn/60s` dispararon
+  inmediatamente (599 líneas, ventana exacta del scan).
+- Tabla de detección en `lab/ejercicios/E01-escalera-sigilo.md`
+  (peldaños 2–4 pendientes).
+- Notas de aprendizaje: connect scan (sin root) vs SYN scan; falso
+  positivo de bruteforce por el scan del 22 (tuning del azul).
+
+---
+
+## 2026-11-16 — E01 peldaño 2: el lento TAMBIÉN cayó
+
+- `nmap -Pn -T1 --max-rate 5 -p 6 puertos`, 196s de ejecución.
+- Detectado: 19 alertas LAB Portscan + 5 `ET SCAN ... PostgreSQL`.
+- Causa: **retransmisiones del connect scan sobre puertos filtrados**
+  cruzan el umbral `count 20` (cuenta paquetes, no puertos únicos).
+- Iteración de regla intentada: `portcount` en detection_filter/filter/
+  threshold → la v8.0.3 no lo soporta (3 errores de parse documentados).
+  Revertido a `count 20` rev:2. Suricata re-validado y activo.
+- Backlog del azul actualizado: detección por cadencia/puertos únicos.
+- Copia de `local.rules` actualizada en el repo.
+
+---
+
+## 2026-11-16 — Cambio de metodología: fases ROJA/AZUL separadas
+
+El usuario prioriza el lado rojo: la campaña corre en dos fases.
+FASE ROJA a ciegas (sin ver telemetría del azul; el asistente apoya
+solo el rojo) → FASE AZUL a libro abierto (análisis de logs, reglas
+nuevas, informe). Antes de cada fase roja, el azul se actualiza en
+silencio (cartas tapadas para el defensor). Peldaños 3-4 del E01 se
+pasan a la fase roja (necesitan root: VPS roja o sudo local).
+Detalles en `AGENTS.md` → "Metodología".
+
+---
+
+## 2026-11-16 — E02: recon pasivo de hayrifa.uy (fase roja, iniciada)
+
+Dossier completo en `lab/ejercicios/E02-recon-pasivo.md`. Resumen:
+- Origen NO expuesto: DNS 100% proxied por CF, mail en edge, tunnel sin
+  puertos entrantes ni cert escaneable → mejor defensa del lab hasta
+  ahora, y es la de producción real.
+- Guess de subdominios pegó: `api.hayrifa.uy` existe (proxied).
+- CAA vacío (higiene pendiente), RDAP de .uy inexistente (lección de
+  tooling: RDAP ARIN para la IP funcionó; dominio cae a whois/nic.uy).
+- **El target responde HTTP 530 en apex y api** (origin unreachable):
+  el blanco está caído para el atacante. Pendiente que el dueño verifique
+  el estado del tunnel (acción fuera de la fase roja).
+
+---
+
+## 2026-11-16 — E02 extendido: superficie de la app (web viva de nuevo)
+
+- Stack: **Next.js** (header expuesto). Redirect raíz → rifa activa con
+  **UUID v7** cuyo timestamp embebido (2026-08-31, día del deploy) es
+  decodificable → IDs parcialmente predecibles: hallazgo real para la
+  fase azul (enumeración/IDOR a revisar).
+- sitemap.xml lista rutas (`/mis-numeros` responde 200 sin sesión — a
+  verificar si el guard es client-side en E03).
+- api.hayrifa.uy: endpoints no obvios (404 en paths comunes) → se
+  descubrirán con el JS del frontend (siguiente paso de recon).
+- Todo en `lab/ejercicios/E02-recon-pasivo.md`.
+
+---
+
+## 2026-11-16 — E02: recon vía bundles JS → Server Actions
+
+- Primer script del arsenal: `lab/scripts/recon_js_endpoints.py`
+  (descarga HTML → extrae chunks → busca endpoints/NEXT_PUBLIC/terceros;
+  output cacheado en `lab/scripts/output/`, .gitignore creado).
+- 14 bundles analizados: **cero endpoints de API en el cliente** — la
+  app usa Next.js **Server Actions** (`createServerReference`), las
+  llamadas van por POST con action-IDs encriptados, no por URLs del API.
+- Recon estático = dead end (hallazgo defensivo-arquitectural). La
+  superficie real de Server Actions (interceptar/reproducir action-IDs
+  con parámetros alterados) queda para el E03.
+- Bonus: PostHog con endpoint `/ingest` identificado.
+
+---
+
+
+
+## 2026-11-16 — ⚠️ INCIDENTE: el lab tiró la web de producción (resuelto)
+
+**Qué pasó**
+
+El 530 que detectó el recon E02 no era del proveedor ni del lab "de
+afuera": fue **causado por nuestro firewall**. El tunnel de cloudflared
+(contenedor) hace conexiones salientes por QUIC hacia el edge de CF; ese
+tráfico atraviesa la cadena `forward` de nftables, que tenía
+`policy drop` sin reglas para los bridges de Docker → tunnel muerto →
+Cloudflare sin origen → 530 en todo el sitio. La web (Next.js) siempre
+estuvo sana adentro del contenedor.
+
+**Por qué no lo vimos venir**
+
+Todas las pruebas post-firewall fueron tráfico de HOST (SSH, apt,
+suricata-update, docker exec) — nunca tráfico de CONTENEDOR hacia
+internet. Lección brutal y real: un cambio de infra "que no toca la web"
+la puede tumbar igual por una cadena intermedia (forward) que nadie
+miró. Es exactamente el tipo de incidente que las post-mortems reales
+documentan.
+
+**Resolución (3 minutos)**
+
+1. Diagnóstico: logs de cloudflared (`failed to dial to edge with quic`)
+   → traffic de contenedor bloqueado en forward.
+2. Fix live: `nft insert rule ... iifname "br-*" accept` (+ docker0 y
+   established) ANTES del drop, por índice.
+3. `Registered tunnel connection` a las 01:48:50 UTC → sitio vivo
+   (307 con CSP verificado desde afuera).
+4. Fix persistente: `/etc/nftables.conf` regenerado con forward
+   corregido (comentario del incidente incluido), validado, aplicado,
+   copia al repo actualizada.
+
+**Mejoras derivadas**
+- Regla del lab: tras CUALQUIER cambio de firewall, probar tráfico de
+  host Y de contenedor (curl al sitio desde afuera incluido).
+- El incidente queda como evidencia de que el lab sí rompe cosas reales:
+  más valor para la fase de "cleanup" del playbook.
+
+---
+
+## 2026-11-16 — Línea de base de fase roja: revertido al estado original
+
+A pedido del usuario ("el rojo ataca lo que yo tenía, no el castillo"):
+
+- ❌ nftables: deshabilitado y tabla `inet filter` eliminada (configs
+  preservadas en el repo para re-aplicar en fase azul)
+- ✅ ufw: re-activado (era el estado original: deny incoming, solo 22)
+- ❌ fail2ban: detenido (con SSH key-only no hay vector de bruteforce)
+- ✅ Suricata: sigue grabando — la cámara de la fase azul (IDS pasivo,
+  no bloquea nada; sin ella no habría qué analizar después)
+- ✅ SSH key-only + NOPASSWD: quedan (operativos, no cambian la
+  superficie de ataque)
+- Verificado post-cambio: SSH OK, web 307 OK, tunnel registrado
+
+Estado del host ahora = tal como lo tenía el usuario antes del lab.
+La fase roja corre contra ESTA línea de base. El hardening completo
+(nftables + fail2ban + reglas nuevas) se arma en la fase AZUL, después
+de la campaña, como entregable defensivo.
+
+---
+
+
+
+
+
+
+
 
 
 ## 2026-11-16 — Sesión 4: password de SSH apagado
